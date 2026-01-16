@@ -1,49 +1,61 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime
 from typing import Optional
 from enum import Enum
-from pydantic import Emailstr
+from pydantic import EmailStr
+from typing import List, Optional
 
 class LicenseStatus(Enum):
-    active = "ACTIVE"
-    expired = "EXPIRED"
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
 
 class LicenseType(Enum):
-    trial = "TRIAL"
-    perpetual = "PERPETUAL"
-    subscription = "SUBSCRIPTION"
+    TRIAL = "TRIAL"
+    PERPETUAL = "PERPETUAL"
+    SUBSCRIPTION = "SUBSCRIPTION"
 
-class Users(SQLModel, table = True):
+class User(SQLModel, table = True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
-    email: Emailstr = Field(unique=True)
-    password: str = Field(max_length=15)
-    created_at: datetime = Field(default = datetime.utcnow())
+    email: EmailStr = Field(unique=True)
+    hashed_password: str
+    created_at: datetime = Field(default_factory = datetime.utcnow)
+    licenses: List["License"] = Relationship(back_populates="users")
+    company: Optional[str] = Relationship(back_populates="users")
 
-class Products(SQLModel, table=True):
+class Product(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     pname: str = Field(index=True, unique=True)
     description: str 
-    created_at: datetime = Field(defualt = datetime.utcnow())
-    updated_at: datetime = Field(default = datetime.utcnow())
+    created_at: datetime = Field(default_factory = datetime.utcnow)
+    updated_at: datetime = Field(default_factory = datetime.utcnow)
+    license: List["License"] = Relationship(back_populates="products")
 
 class License(SQLModel, table=True):
-    uname: str = Field(foriegn_key = "Users.username")
-    product_id: int = Field(foriegn_key = "Products.id")
+    id: Optional[int] = Field(primary_key=True)
+    user_id: int = Field(foreign_key = "user.id")
+    product_id: int = Field(foreign_key = "product.id")
     description: str
     created_at: datetime = Field(default=datetime.utcnow())
     expiry_time: datetime = Field(default = datetime.utcnow())
-    company_id: int = Field(foriegn_key = "Comapny.id")
+    company_id: int = Field(foreign_key = "company.id")
     license_key: str
-    status: LicenseStatus = Field(default = LicenseStatus.active)
+    status: LicenseStatus = Field(default = LicenseStatus.ACTIVE)
     license_type: LicenseType
+    users: Optional["User"] = Relationship(back_populates="licenses")
+    company_products: List["CompanyProduct"] = Relationship(back_populates="licenses")
 
 class Company(SQLModel, table=True):
-    id: int
+    id: Optional[int] = Field(primary_key=True)
     company_name: str
-    company_email: Emailstr
+    company_email: EmailStr
+    users: List[User] = Relationship(back_populates="company")
+    company_products: List["CompanyProduct"] = Relationship(back_populates="company")
     
 class CompanyProduct(SQLModel, table=True):
-    product_id: int = Field(foriegn_key = "Products.id", primary_key=True)
-    company_id: int = Field(foriegn_key = "Company.id", primary_key=True)
+    product_id: int = Field(foreign_key = "product.id", primary_key=True)
+    company_id: int = Field(foreign_key = "company.id", primary_key=True)
     quantity: int = Field(default=1, ge=1)
+    licenses: List[License] = Relationship(back_populates="company_products")
+    products: List[Product] = Relationship(back_populates="products")
+
