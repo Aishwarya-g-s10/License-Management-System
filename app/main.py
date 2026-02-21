@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import Session, select
 from .models import User
 from pydantic import EmailStr
@@ -35,6 +35,31 @@ def create_user(username: str, email: EmailStr, password: str, session: Session 
 def get_users(session: Session = Depends(get_session)):
     users = session.exec(select(User)).all()
     return users
+
+@app.put("/update_user/{user_id}", response_model=UserOut)
+def update_user(user_id:int, username:str, email: EmailStr, session: Session = Depends(get_session)):
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User ID Not Found")
+    user.username = username
+    user.email = email
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+@app.delete("/delete_user")
+def delete_user(user_id: int, session: Session = Depends(get_session)):
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User Id Not Found")
+    session.delete(user)
+    session.commit()
+    return {
+        "id": user_id,
+        "message": "User Deleted successfully"
+    }
+
     
 
 
