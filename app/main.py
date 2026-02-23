@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from .models import User
 from pydantic import EmailStr
 from .database import get_session, create_db_and_tables
@@ -20,41 +21,42 @@ def home():
     }
 
 @app.post("/create_user")
-def create_user(username: str, email: EmailStr, password: str, session: Session = Depends(get_session)):
+async def create_user(username: str, email: EmailStr, password: str, session: AsyncSession = Depends(get_session)):
     user = User(username=username, email=email, password=password)
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
     return{
         "id": user.id,
         "username": user.username,
         "email": user.email
     }
 
-@app.get("/users", response_model=List[UserOut])
-def get_users(session: Session = Depends(get_session)):
-    users = session.exec(select(User)).all()
-    return users
+@app.get("/get_users", response_model=List[UserOut])
+async def get_users(session: AsyncSession = Depends(get_session)):
+    users =  await session.execute(select(User))
+    result = users.scalars().all()
+    return result
 
 @app.put("/update_user/{user_id}", response_model=UserOut)
-def update_user(user_id:int, username:str, email: EmailStr, session: Session = Depends(get_session)):
-    user = session.get(User, user_id)
+async def update_user(user_id:int, username:str, email: EmailStr, session: AsyncSession = Depends(get_session)):
+    user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User ID Not Found")
     user.username = username
     user.email = email
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
     return user
 
 @app.delete("/delete_user")
-def delete_user(user_id: int, session: Session = Depends(get_session)):
-    user = session.get(User, user_id)
+async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)):
+    user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User Id Not Found")
-    session.delete(user)
-    session.commit()
+    await session.delete(user)
+    await session.commit()
     return {
         "id": user_id,
         "message": "User Deleted successfully"
