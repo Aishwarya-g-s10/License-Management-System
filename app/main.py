@@ -6,13 +6,14 @@ from pydantic import EmailStr
 from .database import get_session, create_db_and_tables
 from .schema import UserIn, UserOut
 from typing import List
+from .security import verify_password, create_access_token, hash_password
 
 
 app = FastAPI()
 
 @app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
+async def on_startup():
+    await create_db_and_tables()
 
 @app.get("/")
 def home():
@@ -20,17 +21,24 @@ def home():
         "message": "This is license management System"
     }
 
-@app.post("/create_user")
+@app.post("/login")
+async def login(data: UserIn, session: AsyncSession = Depends(get_session)):
+    statement = select(User).where(User.email == data.email)
+    result = await session.execute(statement)
+    user = result.scalars().first()
+    if not user or not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "Bearer"}
+
+
+@app.post("/create_user", response_model=UserOut)
 async def create_user(username: str, email: EmailStr, password: str, session: AsyncSession = Depends(get_session)):
-    user = User(username=username, email=email, password=password)
+    user = User(username=username, email=email, password=hash_password(password))
     session.add(user)
     await session.commit()
     await session.refresh(user)
-    return{
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    }
+    return user
 
 @app.get("/get_users", response_model=List[UserOut])
 async def get_users(session: AsyncSession = Depends(get_session)):
