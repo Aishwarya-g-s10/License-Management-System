@@ -6,7 +6,8 @@ from pydantic import EmailStr
 from .database import get_session, create_db_and_tables
 from .schema import UserIn, UserOut
 from typing import List
-from .security import verify_password, create_access_token, hash_password
+from .security import verify_password, create_access_token, hash_password, get_current_user
+from fastapi.security import OAuth2PasswordRequestForm
 
 
 app = FastAPI()
@@ -22,8 +23,8 @@ def home():
     }
 
 @app.post("/login")
-async def login(data: UserIn, session: AsyncSession = Depends(get_session)):
-    statement = select(User).where(User.email == data.email)
+async def login(data: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_session)):
+    statement = select(User).where(User.email == data.username)
     result = await session.execute(statement)
     user = result.scalars().first()
     if not user or not verify_password(data.password, user.password):
@@ -34,20 +35,22 @@ async def login(data: UserIn, session: AsyncSession = Depends(get_session)):
 
 @app.post("/create_user", response_model=UserOut)
 async def create_user(username: str, email: EmailStr, password: str, session: AsyncSession = Depends(get_session)):
-    user = User(username=username, email=email, password=hash_password(password))
+    user = User(username=username, email=email, password=hash_password(password))   
     session.add(user)
     await session.commit()
     await session.refresh(user)
     return user
 
 @app.get("/get_users", response_model=List[UserOut])
-async def get_users(session: AsyncSession = Depends(get_session)):
+async def get_users(session: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
     users =  await session.execute(select(User))
     result = users.scalars().all()
     return result
 
 @app.put("/update_user/{user_id}", response_model=UserOut)
-async def update_user(user_id:int, username:str, email: EmailStr, session: AsyncSession = Depends(get_session)):
+async def update_user(user_id:int, username:str, email: EmailStr, session: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=401, detail="You are unauthorized to perform this action")
     user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User ID Not Found")
@@ -59,16 +62,22 @@ async def update_user(user_id:int, username:str, email: EmailStr, session: Async
     return user
 
 @app.delete("/delete_user")
-async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_user(user_id: int, session: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=401, detail="You are unauthorized to perform this action")
     user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User Id Not Found")
-    await session.delete(user)
-    await session.commit()
-    return {
-        "id": user_id,
-        "message": "User Deleted successfully"
-    }
+    try:
+        await session.delete(user)
+        await session.commit()
+        return {
+            "id": user_id,
+            "message": "User Deleted successfully"
+        }
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail="Database Error")
 
     
 
