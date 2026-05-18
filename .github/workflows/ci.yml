@@ -5,10 +5,10 @@ on:
       - main
 jobs:
   build-and-push:
-    run-on: ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/Checkout@v6
+        uses: actions/checkout@v6
       - name: Set up python
         uses: actions/setup-python@v6
         with:
