@@ -36,7 +36,7 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
-ACCESS_TOKEN_EXPIRY_TIME = int(os.getenv("ACCESS_TOKEN_EXPIRY_TIME"))
+ACCESS_TOKEN_EXPIRY_TIME = os.getenv("ACCESS_TOKEN_EXPIRY_TIME")
 
 if not SECRET_KEY or not ALGORITHM or not ACCESS_TOKEN_EXPIRY_TIME:
     raise ValueError("Environment Variable not found")
@@ -50,9 +50,29 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict):
+
+    print("SECRET_KEY:", repr(SECRET_KEY), type(SECRET_KEY))
+    print("ALGORITHM:", repr(ALGORITHM), type(ALGORITHM))
+
+    # 🔥 Test 1: Hardcoded (this MUST work)
+    print("TEST TOKEN:", jwt.encode({"a": 1}, "secret", algorithm="HS256"))
+
     to_encode = data.copy()
-    expiry_time = datetime.now(timezone.utc) + timedelta(ACCESS_TOKEN_EXPIRY_TIME)
+
+    expiry_time = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRY_TIME)
     to_encode.update({"exp": expiry_time})
+
+    print("PAYLOAD:", to_encode)
+
+    # 🔥 Test 2: Using your variables
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
     return encoded_jwt
+    # to_encode = data.copy()
+    # print("SECRET_KEY", SECRET_KEY)
+    # print("ALGORITHM", ALGORITHM)
+    # expiry_time = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRY_TIME)
+    # to_encode.update({"exp": expiry_time})
+    # encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    # return encoded_jwt
 
